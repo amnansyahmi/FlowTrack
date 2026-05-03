@@ -1,0 +1,6 @@
+{
+  "name": "FlowTrack",
+  "description": "Premium mobile-first personal finance app with OCR receipt scanning, budget limits, debt tracking, and smart cash flow forecasting.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["PWA", "Offline Support", "IndexedDB"]
+}
