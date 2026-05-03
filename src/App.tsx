@@ -355,13 +355,18 @@ export default function App() {
     setIsScanning(true);
     try {
       const worker = await createWorker('eng');
-      const { data: { text } } = await worker.recognize(file);
+      const { data: { text, confidence } } = await worker.recognize(file);
       await worker.terminate();
       
       // Parser for Malaysian Receipts
       const lines = text.split('\n').filter(l => l.trim() !== '');
-      const merchant = lines[0] || 'Unknown Merchant';
+      let merchant = lines[0] || 'Unknown Merchant';
       
+      // Specifically look for Maybank
+      if (text.toUpperCase().includes('MAYBANK') || text.toUpperCase().includes('MALAYAN BANKING')) {
+        merchant = 'Maybank Transfer';
+      }
+
       // Extract Amount
       const amountRegex = /(?:TOTAL|AMOUNT|AMT|RM|CASH)\s*:?\s*(\d+(?:\.\d{2})?)/i;
       const amountMatch = text.match(amountRegex);
@@ -369,9 +374,23 @@ export default function App() {
       
       // Extract Date
       const dateRegex = /(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4})/;
+      const dateRegexNamed = /(\d{1,2})\s+(JAN|FEB|MAR|APR|MAY|JUN|JUL|AUG|SEP|OCT|NOV|DEC)[A-Z]*\s+(\d{4})/i;
+
       const dateMatch = text.match(dateRegex);
+      const dateMatchNamed = text.match(dateRegexNamed);
+
       let date = format(new Date(), 'yyyy-MM-dd');
-      if (dateMatch) {
+      
+      if (dateMatchNamed) {
+        const d = dateMatchNamed[1];
+        const mStr = dateMatchNamed[2].toUpperCase();
+        const y = dateMatchNamed[3];
+        const months: {[key: string]: string} = {
+          'JAN': '01', 'FEB': '02', 'MAR': '03', 'APR': '04', 'MAY': '05', 'JUN': '06',
+          'JUL': '07', 'AUG': '08', 'SEP': '09', 'OCT': '10', 'NOV': '11', 'DEC': '12'
+        };
+        date = `${y}-${months[mStr]}-${d.padStart(2, '0')}`;
+      } else if (dateMatch) {
          // simplistic DD/MM/YYYY to YYYY-MM-DD
          const d = dateMatch[1];
          const m = dateMatch[2];
@@ -383,6 +402,7 @@ export default function App() {
         merchant,
         amount,
         date,
+        confidence,
         raw: text
       });
     } catch (err) {
@@ -390,6 +410,16 @@ export default function App() {
     } finally {
       setIsScanning(false);
     }
+  };
+
+  const simulateMaybank = () => {
+    setOcrResult({
+      merchant: 'Maybank Transfer',
+      amount: 250.00,
+      date: format(new Date(), 'yyyy-MM-dd'),
+      confidence: 98,
+      raw: 'MAYBANK MALAYAN BANKING BERHAD\nTransaction Successful\nAmount: RM 250.00\nDate: 03 MAY 2026'
+    });
   };
 
   const closeMonth = async () => {
@@ -562,8 +592,14 @@ export default function App() {
                         } else if (action.label === 'History') {
                            setActiveView('Reports');
                         } else {
-                           setShowAddModal(action.label === 'Bill' ? 'Commitments' : action.label + 's' as any);
+                           setShowAddModal(action.label === 'Bill' ? 'Commitments' : (action.label === 'Income' ? 'Income' : action.label + 's') as any);
                         }
+                    }}
+                    onContextMenu={(e) => {
+                      if (action.label === 'Scan') {
+                        e.preventDefault();
+                        simulateMaybank();
+                      }
                     }}
                     className="flex flex-col items-center justify-center min-w-[80px] p-4 bg-white rounded-2xl border border-gray-100 shadow-sm active:scale-95 transition-all"
                   >
@@ -571,6 +607,9 @@ export default function App() {
                       <action.icon size={20} />
                     </div>
                     <span className="text-[10px] font-bold uppercase tracking-widest text-gray-500">{action.label}</span>
+                    {action.label === 'Scan' && (
+                      <span className="text-[8px] text-gray-400 mt-0.5 normal-case font-medium">(Hold to test)</span>
+                    )}
                   </button>
                 ))}
               </div>
@@ -1374,11 +1413,28 @@ export default function App() {
             >
               <div className="bg-white w-full max-w-md rounded-[40px] p-8 shadow-2xl space-y-6">
                 <div className="flex justify-between items-center">
-                  <h2 className="text-2xl font-black tracking-tight text-gray-900">Found Receipt!</h2>
+                  <div className="space-y-0.5">
+                    <h2 className="text-2xl font-black tracking-tight text-gray-900">Found Receipt!</h2>
+                    <div className="flex items-center gap-1.5 pt-1">
+                      <div className={`w-1.5 h-1.5 rounded-full ${ocrResult.confidence > 80 ? 'bg-green-500' : ocrResult.confidence > 60 ? 'bg-amber-500' : 'bg-red-500'} animate-pulse`} />
+                      <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest leading-none">
+                        AI Confidence: {Math.round(ocrResult.confidence || 0)}%
+                      </span>
+                    </div>
+                  </div>
                   <button onClick={() => setOcrResult(null)} className="p-2 bg-gray-50 rounded-full text-gray-400 hover:text-black">
                      <X size={20} />
                   </button>
                 </div>
+
+                {ocrResult.confidence < 70 && (
+                  <div className="bg-amber-50 p-3 rounded-2xl border border-amber-100 flex gap-3">
+                    <AlertCircle size={16} className="text-amber-600 shrink-0 mt-0.5" />
+                    <p className="text-[10px] text-amber-800 font-medium leading-relaxed">
+                      AI is unsure about some data. Please double-check the merchant and amount before saving.
+                    </p>
+                  </div>
+                )}
                 
                 <div className="space-y-4">
                   <div className="space-y-1">
@@ -1411,6 +1467,19 @@ export default function App() {
                       />
                     </div>
                   </div>
+
+                  <div className="space-y-1">
+                    <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest pl-1">Category</p>
+                    <select 
+                      value={ocrResult.categoryId || categories.find(c => c.type === 'expense')?.id || ''} 
+                      onChange={(e) => setOcrResult({ ...ocrResult, categoryId: e.target.value })}
+                      className="w-full h-12 bg-gray-100 rounded-2xl px-5 font-bold outline-none focus:ring-2 focus:ring-blue-600 transition-all appearance-none"
+                    >
+                      {categories.filter(c => c.type === 'expense').map(c => (
+                        <option key={c.id} value={c.id}>{c.icon} {c.name}</option>
+                      ))}
+                    </select>
+                  </div>
                 </div>
 
                 <div className="pt-4 flex gap-3">
@@ -1426,8 +1495,9 @@ export default function App() {
                         amount: ocrResult.amount,
                         date: ocrResult.date,
                         note: ocrResult.merchant,
-                        categoryId: categories.find(c => c.id === 'Food')?.id || categories[0].id,
-                        merchant: ocrResult.merchant
+                        categoryId: ocrResult.categoryId || categories.find(c => c.type === 'expense')?.id || categories[0].id,
+                        merchant: ocrResult.merchant,
+                        paymentMethod: 'OCR Scan'
                       };
                       await handleAddData('Expenses', data);
                       setOcrResult(null);
@@ -1571,8 +1641,7 @@ export default function App() {
                   note: formData.get('note'),
                 };
                 if (showAddModal === 'Income') {
-                  const salaryCat = categories.find(c => c.type === 'income');
-                  data.categoryId = salaryCat?.id;
+                  data.categoryId = formData.get('category') as string;
                   data.isSalary = formData.get('isSalary') === 'true';
                   data.monthKey = formData.get('monthKey') || monthYearKey;
                   data.source = formData.get('source');
@@ -1667,16 +1736,24 @@ export default function App() {
                       <div className="space-y-4">
                         <div className="grid grid-cols-2 gap-4">
                           <div className="space-y-1">
+                            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest pl-1">Category</p>
+                            <select name="category" className="w-full h-14 bg-gray-100 dark:bg-gray-800 rounded-2xl px-6 font-bold appearance-none" required>
+                              {categories.filter(c => c.type === 'income').map(c => (
+                                <option key={c.id} value={c.id}>{c.icon} {c.name}</option>
+                              ))}
+                            </select>
+                          </div>
+                          <div className="space-y-1">
                             <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest pl-1">Income Type</p>
                             <select name="isSalary" className="w-full h-14 bg-gray-100 dark:bg-gray-800 rounded-2xl px-6 font-bold appearance-none">
                               <option value="false">Extra Income</option>
                               <option value="true">Fixed Salary</option>
                             </select>
                           </div>
-                          <div className="space-y-1">
-                            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest pl-1">Source</p>
-                            <input name="source" placeholder="Employer/Bank" className="w-full h-14 bg-gray-100 dark:bg-gray-800 rounded-2xl px-6 font-bold" />
-                          </div>
+                        </div>
+                        <div className="space-y-1">
+                          <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest pl-1">Source</p>
+                          <input name="source" placeholder="Employer/Bank" className="w-full h-14 bg-gray-100 dark:bg-gray-800 rounded-2xl px-6 font-bold" />
                         </div>
                         <div className="space-y-1">
                           <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest pl-1">Note</p>

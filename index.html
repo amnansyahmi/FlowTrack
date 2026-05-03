@@ -17,8 +17,22 @@
       body {
         -webkit-tap-highlight-color: transparent;
         overscroll-behavior-y: none;
+        touch-action: pan-x pan-y;
       }
     </style>
+    <script>
+      // Prevent double-tap to zoom
+      document.addEventListener('touchstart', (e) => {
+        if (e.touches.length > 1) {
+          e.preventDefault();
+        }
+      }, { passive: false });
+
+      // Prevent pinch to zoom
+      document.addEventListener('gesturestart', (e) => {
+        e.preventDefault();
+      });
+    </script>
   </head>
   <body class="bg-white dark:bg-black font-sans antialiased text-gray-900 dark:text-gray-100">
     <div id="root"></div>
