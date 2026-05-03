@@ -26,7 +26,8 @@ import {
   Copy,
   TrendingUp,
   FileText,
-  AlertCircle
+  AlertCircle,
+  History
 } from 'lucide-react';
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
@@ -197,8 +198,19 @@ export default function App() {
             { id: '1', name: 'Food', icon: '🍔', type: 'expense' },
             { id: '2', name: 'Transport', icon: '🚗', type: 'expense' },
             { id: '3', name: 'Bills', icon: '📄', type: 'expense' },
-            { id: '4', name: 'Salary', icon: '💰', type: 'income' },
-            { id: '5', name: 'Rental', icon: '🏠', type: 'commitment' },
+            { id: '4', name: 'Shopping', icon: '🛍️', type: 'expense' },
+            { id: '5', name: 'Groceries', icon: '🛒', type: 'expense' },
+            { id: '6', name: 'Healthcare', icon: '🏥', type: 'expense' },
+            { id: '7', name: 'Entertainment', icon: '🎮', type: 'expense' },
+            { id: '8', name: 'Family', icon: '👨‍👩-👧', type: 'expense' },
+            { id: '9', name: 'Debt', icon: '📉', type: 'expense' },
+            { id: '10', name: 'Others', icon: '🏷️', type: 'expense' },
+            { id: '101', name: 'Salary', icon: '💰', type: 'income' },
+            { id: '102', name: 'Refunding', icon: '🔙', type: 'income' },
+            { id: '103', name: 'Others', icon: '➕', type: 'income' },
+            { id: '201', name: 'Rent', icon: '🏠', type: 'commitment' },
+            { id: '202', name: 'Loan', icon: '🏦', type: 'commitment' },
+            { id: '203', name: 'Others', icon: '📦', type: 'commitment' },
           ];
           for (const c of defaultCats) await update('categories', c);
           setCategories(defaultCats);
@@ -532,7 +544,8 @@ export default function App() {
                   { label: 'Income', icon: ArrowUpRight, color: 'text-green-600', bg: 'bg-green-50' },
                   { label: 'Expense', icon: ArrowDownRight, color: 'text-red-600', bg: 'bg-red-50' },
                   { label: 'Bill', icon: Clock, color: 'text-blue-600', bg: 'bg-blue-50' },
-                  { label: 'Scan', icon: Camera, color: 'text-indigo-600', bg: 'bg-indigo-50' }
+                  { label: 'Scan', icon: Camera, color: 'text-indigo-600', bg: 'bg-indigo-50' },
+                  { label: 'History', icon: History, color: 'text-amber-600', bg: 'bg-amber-50' }
                 ].map((action, i) => (
                   <button 
                     key={i}
@@ -546,6 +559,8 @@ export default function App() {
                              if (file) handleOCR(file);
                            };
                            input.click();
+                        } else if (action.label === 'History') {
+                           setActiveView('Reports');
                         } else {
                            setShowAddModal(action.label === 'Bill' ? 'Commitments' : action.label + 's' as any);
                         }
@@ -1637,34 +1652,66 @@ export default function App() {
                 )}
 
                 {(showAddModal === 'Income' || showAddModal === 'Expenses') && (
-                  <>
-                    <input name="amount" type="number" step="0.01" placeholder="Amount (RM)" className="w-full h-14 bg-gray-100 dark:bg-gray-800 rounded-2xl px-6 font-bold" required />
-                    <input name="date" type="date" className="w-full h-14 bg-gray-100 dark:bg-gray-800 rounded-2xl px-6 font-bold" defaultValue={format(new Date(), 'yyyy-MM-dd')} />
+                  <div className="space-y-4">
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-1">
+                        <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest pl-1">Amount (RM)</p>
+                        <input name="amount" type="number" step="0.01" placeholder="0.00" className="w-full h-14 bg-gray-100 dark:bg-gray-800 rounded-2xl px-6 font-bold" required />
+                      </div>
+                      <div className="space-y-1">
+                        <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest pl-1">Date</p>
+                        <input name="date" type="date" className="w-full h-14 bg-gray-100 dark:bg-gray-800 rounded-2xl px-6 font-bold" defaultValue={format(new Date(), 'yyyy-MM-dd')} />
+                      </div>
+                    </div>
                     {showAddModal === 'Income' && (
-                      <div className="grid grid-cols-2 gap-4">
-                        <select name="isSalary" className="w-full h-14 bg-gray-100 dark:bg-gray-800 rounded-2xl px-6 font-bold appearance-none">
-                          <option value="false">Extra Income</option>
-                          <option value="true">Fixed Salary</option>
-                        </select>
-                        <input name="source" placeholder="Source" className="w-full h-14 bg-gray-100 dark:bg-gray-800 rounded-2xl px-6 font-bold" />
+                      <div className="space-y-4">
+                        <div className="grid grid-cols-2 gap-4">
+                          <div className="space-y-1">
+                            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest pl-1">Income Type</p>
+                            <select name="isSalary" className="w-full h-14 bg-gray-100 dark:bg-gray-800 rounded-2xl px-6 font-bold appearance-none">
+                              <option value="false">Extra Income</option>
+                              <option value="true">Fixed Salary</option>
+                            </select>
+                          </div>
+                          <div className="space-y-1">
+                            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest pl-1">Source</p>
+                            <input name="source" placeholder="Employer/Bank" className="w-full h-14 bg-gray-100 dark:bg-gray-800 rounded-2xl px-6 font-bold" />
+                          </div>
+                        </div>
+                        <div className="space-y-1">
+                          <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest pl-1">Note</p>
+                          <input name="note" placeholder="What's this for?" className="w-full h-14 bg-gray-100 dark:bg-gray-800 rounded-2xl px-6 font-bold" />
+                        </div>
                       </div>
                     )}
                     {showAddModal === 'Expenses' && (
-                      <>
+                      <div className="space-y-4">
                         <div className="grid grid-cols-2 gap-4">
-                          <select name="category" className="w-full h-14 bg-gray-100 dark:bg-gray-800 rounded-2xl px-6 font-bold appearance-none" required>
-                            <option value="">Category</option>
-                            {categories.filter(c => c.type === 'expense').map(c => (
-                              <option key={c.id} value={c.id}>{c.icon} {c.name}</option>
-                            ))}
-                          </select>
-                          <input name="paymentMethod" placeholder="Method" className="w-full h-14 bg-gray-100 dark:bg-gray-800 rounded-2xl px-6 font-bold" />
+                          <div className="space-y-1">
+                            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest pl-1">Category</p>
+                            <select name="category" className="w-full h-14 bg-gray-100 dark:bg-gray-800 rounded-2xl px-6 font-bold appearance-none" required>
+                              <option value="">Select</option>
+                              {categories.filter(c => c.type === 'expense').map(c => (
+                                <option key={c.id} value={c.id}>{c.icon} {c.name}</option>
+                              ))}
+                            </select>
+                          </div>
+                          <div className="space-y-1">
+                            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest pl-1">Method</p>
+                            <input name="paymentMethod" placeholder="Cash/Card" className="w-full h-14 bg-gray-100 dark:bg-gray-800 rounded-2xl px-6 font-bold" />
+                          </div>
                         </div>
-                        <input name="merchant" placeholder="Merchant name" className="w-full h-14 bg-gray-100 dark:bg-gray-800 rounded-2xl px-6 font-bold" />
-                      </>
+                        <div className="space-y-1">
+                          <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest pl-1">Merchant</p>
+                          <input name="merchant" placeholder="Where did you spend?" className="w-full h-14 bg-gray-100 dark:bg-gray-800 rounded-2xl px-6 font-bold" />
+                        </div>
+                        <div className="space-y-1">
+                          <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest pl-1">Note</p>
+                          <input name="note" placeholder="Optional details" className="w-full h-14 bg-gray-100 dark:bg-gray-800 rounded-2xl px-6 font-bold" />
+                        </div>
+                      </div>
                     )}
-                    <input name="note" placeholder="Note (Optional)" className="w-full h-14 bg-gray-100 dark:bg-gray-800 rounded-2xl px-6 font-bold" />
-                  </>
+                  </div>
                 )}
 
                 <button type="submit" className="w-full h-16 bg-blue-600 text-white rounded-2xl font-bold text-lg shadow-xl shadow-blue-500/20 active:scale-95 transition-transform mt-4">
