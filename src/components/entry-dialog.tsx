@@ -1,6 +1,11 @@
+import { debtTypes, isDebtType } from "../lib/debt-statement";
+import { ImageIcon } from "./image-icon";
+import { BillIconPicker } from "./bill-icon-picker";
+import { isBillIcon, type BillIcon } from "../lib/icons";
 import { useState } from "react";
 import type { Finance } from "../hooks/use-finance";
-import type { StoreName } from "../lib/types";
+import type { Change } from "../lib/db";
+import type { Receipt, StoreName } from "../lib/types";
 import { amount, date, day, text } from "../lib/validation";
 import { dateKey, budgetLimit } from "../lib/finance";
 import { subscriptions } from "../lib/subscriptions";
@@ -27,6 +32,7 @@ export type EditorKind =
 export interface Editor {
   kind: EditorKind;
   row?: Record<string, unknown>;
+  attachment?: Receipt;
 }
 const titles: Record<EditorKind, string> = {
   income: "income",
@@ -45,15 +51,20 @@ export function EntryDialog({
   finance,
   month,
   onClose,
+  onStatement,
 }: {
   editor: Editor;
   finance: Finance;
   month: string;
   onClose: () => void;
+  onStatement?: (editor: Editor) => void;
 }) {
   const { kind, row } = editor;
   const { data } = finance;
   const [error, setError] = useState("");
+  const [billIcon, setBillIcon] = useState<BillIcon | "auto">(
+    isBillIcon(row?.icon) ? row.icon : "auto",
+  );
   const [preset, setPreset] = useState(String(row?.title ?? ""));
   const str = (key: string, fallback = "") =>
     row?.[key] !== undefined ? String(row[key]) : fallback;
@@ -123,6 +134,7 @@ export function EntryDialog({
         value = {
           ...value,
           title: text(form.get("title"), "Bill name"),
+          icon: billIcon === "auto" ? undefined : billIcon,
           amount: amount(form.get("amount")),
           dueDateDay: day(form.get("day")),
           frequency: form.get("frequency"),
@@ -165,6 +177,10 @@ export function EntryDialog({
           startDate: date(form.get("startDate")),
         };
         if (kind === "debts") {
+          const selectedType = form.get("debtType");
+          if (!isDebtType(selectedType)) throw new Error("Choose a debt type.");
+          value.debtType = selectedType;
+          if (editor.attachment) value.statementId = editor.attachment.id;
           value.lender = text(form.get("lender"), "Lender");
           value.monthlyPayment = amount(
             form.get("monthly"),
@@ -269,8 +285,10 @@ export function EntryDialog({
           throw new Error("This category already exists.");
         value = { ...value, name, type, icon: "" };
       }
-      if (await finance.change([{ store, value: value as { id: string } }]))
-        onClose();
+      const changes: Change[] = [{ store, value: value as { id: string } }];
+      if (kind === "debts" && editor.attachment)
+        changes.unshift({ store: "receipts", value: editor.attachment });
+      if (await finance.change(changes)) onClose();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Review the form.");
     }
@@ -325,6 +343,11 @@ export function EntryDialog({
               value={preset}
               onChange={(e) => setPreset(e.target.value)}
               required
+            />
+            <BillIconPicker
+              title={preset}
+              value={billIcon}
+              onChange={setBillIcon}
             />
             <div className="form-grid">
               <Field
@@ -494,6 +517,67 @@ export function EntryDialog({
         )}
         {(kind === "debts" || kind === "receivables") && (
           <>
+            {kind === "debts" && (
+              <>
+                <SelectField
+                  label="Debt type"
+                  name="debtType"
+                  defaultValue={str("debtType", "loan")}
+                  options={debtTypes.map((type) => ({
+                    value: type.value,
+                    label: type.label,
+                  }))}
+                />
+                {onStatement && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="w-full"
+                    onClick={(event) => {
+                      const form = new FormData(event.currentTarget.form!);
+                      onStatement({
+                        ...editor,
+                        row: {
+                          ...row,
+                          name: form.get("name"),
+                          lender: form.get("lender"),
+                          debtType: form.get("debtType"),
+                          originalAmount:
+                            form.get("original") || row?.originalAmount,
+                          remainingAmount:
+                            form.get("remaining") || row?.remainingAmount,
+                          monthlyPayment:
+                            form.get("monthly") || row?.monthlyPayment,
+                          dueDay: form.get("day") || row?.dueDay,
+                          startDate: form.get("startDate") || row?.startDate,
+                          totalInstallments:
+                            form.get("installments") || row?.totalInstallments,
+                          initialPaidInstallments:
+                            form.get("initialPaid") ||
+                            row?.initialPaidInstallments,
+                        },
+                      });
+                    }}
+                  >
+                    <ImageIcon name="scan" />
+                    Read statement / screenshot
+                  </Button>
+                )}
+                {editor.attachment && (
+                  <div className="flex items-center gap-3 rounded-lg bg-secondary p-3">
+                    <img
+                      src={editor.attachment.data}
+                      alt="Attached statement preview"
+                      className="size-12 rounded object-cover"
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      Statement preview will be attached when you save this
+                      debt.
+                    </p>
+                  </div>
+                )}
+              </>
+            )}
             <Field
               label="Name"
               name="name"

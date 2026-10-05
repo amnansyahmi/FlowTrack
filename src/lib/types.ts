@@ -1,3 +1,6 @@
+import type { DebtType } from "./debt-statement";
+import type { BillIcon } from "./icons";
+
 export interface Category {
   id: string;
   name: string;
@@ -34,6 +37,7 @@ export interface Expense {
 }
 
 export interface Commitment {
+  icon?: BillIcon; // Omit to detect an icon or brand logo from the name.
   id: string;
   title: string;
   amount: number;
@@ -102,6 +106,8 @@ export interface Budget {
 }
 
 export interface Debt {
+  debtType?: DebtType;
+  statementId?: string;
   id: string;
   name: string;
   lender: string;

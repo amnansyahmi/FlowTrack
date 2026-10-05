@@ -35,6 +35,7 @@ export function Settings({
     <div className="space-y-6">
       <Panel
         title="Savings & payday"
+        icon="savings"
         description="Your savings target is reserved from safe spending and stays saved after reload."
       >
         <form
@@ -101,6 +102,7 @@ export function Settings({
       </Panel>
       <Panel
         title="Backup & restore"
+        icon="download"
         description="Your records are stored on this device. Keep backups before clearing browser data or changing devices."
       >
         <div className="flex flex-wrap gap-2">
@@ -116,6 +118,7 @@ export function Settings({
       </Panel>
       <Panel
         title="Categories"
+        icon="grid"
         action={
           <Button
             variant="outline"
@@ -176,6 +179,7 @@ export function Settings({
       </Panel>
       <Panel
         title="Device storage"
+        icon="shield"
         description="Core screens work offline after the installed app is cached. Receipt scanning may need a connection for its first download."
       >
         <Button

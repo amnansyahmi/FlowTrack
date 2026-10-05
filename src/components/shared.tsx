@@ -1,4 +1,5 @@
 import { useId, useState, type ReactNode } from "react";
+import { ImageIcon, type IconName } from "./image-icon";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 import { Label } from "./ui/label";
@@ -45,8 +46,10 @@ export function Panel({
   action,
   children,
   className = "",
+  icon,
 }: {
   title: string;
+  icon?: IconName;
   description?: string;
   action?: ReactNode;
   children: ReactNode;
@@ -56,7 +59,10 @@ export function Panel({
     <Card className={className}>
       <CardHeader className="flex flex-row items-start justify-between gap-4">
         <div>
-          <CardTitle>{title}</CardTitle>
+          <CardTitle className="flex items-center gap-2">
+            {icon && <ImageIcon name={icon} className="size-5" />}
+            {title}
+          </CardTitle>
           {description && (
             <CardDescription className="mt-1.5">{description}</CardDescription>
           )}
@@ -67,8 +73,21 @@ export function Panel({
     </Card>
   );
 }
-export function Empty({ children }: { children: ReactNode }) {
-  return <p className="py-8 text-sm text-muted-foreground">{children}</p>;
+export function Empty({
+  children,
+  icon = "receipt",
+}: {
+  children: ReactNode;
+  icon?: IconName;
+}) {
+  return (
+    <div className="empty-state">
+      <span className="empty-icon">
+        <ImageIcon name={icon} />
+      </span>
+      <p className="text-sm text-muted-foreground">{children}</p>
+    </div>
+  );
 }
 export function Field({
   label,
@@ -187,7 +206,7 @@ export function DateField({
                   })
                 : "Choose date"}
             </span>
-            <span className="text-xs text-muted-foreground">Calendar</span>
+            <ImageIcon name="calendar" className="size-5" />
           </Button>
         </PopoverTrigger>
         <PopoverContent className="w-auto p-0" align="start">

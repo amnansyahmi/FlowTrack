@@ -12,6 +12,8 @@ export default defineConfig({
       injectRegister: null,
       includeAssets: [
         "logos/*.svg",
+        "icons/*.svg",
+        "vendor/pdfjs/*.mjs",
         "app-icon.svg",
         "icon-192.png",
         "icon-512.png",
@@ -23,7 +25,7 @@ export default defineConfig({
         description: "Personal finance, clearly.",
         start_url: "/",
         display: "standalone",
-        background_color: "#f7f7f5",
+        background_color: "#f3f5f2",
         theme_color: "#17624a",
         icons: [
           { src: "/icon-192.png", sizes: "192x192", type: "image/png" },
@@ -42,7 +44,7 @@ export default defineConfig({
         ],
       },
       workbox: {
-        globPatterns: ["**/*.{js,css,html,svg,png,woff2,webmanifest}"],
+        globPatterns: ["**/*.{js,mjs,css,html,svg,png,woff2,webmanifest}"],
         navigateFallback: "/index.html",
         cleanupOutdatedCaches: true,
         maximumFileSizeToCacheInBytes: 3 * 1024 * 1024,

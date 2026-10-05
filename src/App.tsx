@@ -1,13 +1,15 @@
 import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import { useRegisterSW } from "virtual:pwa-register/react";
 import { useFinance } from "./hooks/use-finance";
-import { dateKey, monthLabel, shiftMonth } from "./lib/finance";
+import { dateKey, shiftMonth } from "./lib/finance";
 import { Button } from "./components/ui/button";
 import {
   Popover,
   PopoverContent,
   PopoverTrigger,
 } from "./components/ui/popover";
+import { ImageIcon, navigationIcons } from "./components/image-icon";
+import { useMobileViewport } from "./hooks/use-mobile-viewport";
 import { Panel, SelectField } from "./components/shared";
 import { EntryDialog, type Editor } from "./components/entry-dialog";
 import { PaymentDialog, type Payment } from "./components/payment-dialog";
@@ -18,6 +20,11 @@ import { Plans } from "./pages/plans";
 import { Budgets } from "./pages/budgets";
 import { Accounts } from "./pages/accounts";
 import { Settings } from "./pages/settings";
+const DebtStatementDialog = lazy(() =>
+  import("./components/debt-statement-dialog").then((module) => ({
+    default: module.DebtStatementDialog,
+  })),
+);
 const Reports = lazy(() => import("./pages/reports"));
 const ImportDialog = lazy(() =>
   import("./components/import-dialog").then((m) => ({
@@ -39,6 +46,7 @@ const views = [
   "More",
 ];
 export default function App() {
+  useMobileViewport();
   const finance = useFinance();
   const [view, setView] = useState(
     () =>
@@ -47,6 +55,7 @@ export default function App() {
   );
   const [month, setMonth] = useState(dateKey().slice(0, 7));
   const [editor, setEditor] = useState<Editor | null>(null);
+  const [statementEditor, setStatementEditor] = useState<Editor | null>(null);
   const [payment, setPayment] = useState<Payment | null>(null);
   const [importOpen, setImportOpen] = useState(false);
   const [scan, setScan] = useState<File | null>(null);
@@ -77,6 +86,11 @@ export default function App() {
       window.removeEventListener("offline", onOnline);
     };
   }, []);
+  useEffect(() => {
+    if (!finance.message) return;
+    const timer = window.setTimeout(() => finance.setMessage(""), 4500);
+    return () => window.clearTimeout(timer);
+  }, [finance.message, finance.setMessage]);
   function navigate(next: string) {
     setView(next);
     window.location.hash = next.toLowerCase();
@@ -85,6 +99,10 @@ export default function App() {
   function edit(next: Editor) {
     finance.setError("");
     setEditor(next);
+  }
+  function openStatement(next: Editor = { kind: "debts" }) {
+    setEditor(null);
+    setStatementEditor(next);
   }
   const props = {
     finance,
@@ -117,8 +135,10 @@ export default function App() {
     <div className="min-h-screen">
       <aside className="desktop-sidebar">
         <a className="brand" href="#home" onClick={() => navigate("Home")}>
+          <span className="brand-mark">
+            <ImageIcon name="brand" />
+          </span>
           FlowTrack
-          <span className="brand-dot" />
         </a>
         <p className="mt-2 text-xs text-muted-foreground">
           Personal finance, clearly.
@@ -134,6 +154,7 @@ export default function App() {
                 aria-current={view === label ? "page" : undefined}
                 onClick={() => navigate(label)}
               >
+                <ImageIcon name={navigationIcons[label]} />
                 {label}
               </Button>
             ))}
@@ -150,21 +171,23 @@ export default function App() {
               className="brand lg:hidden"
               onClick={() => navigate("Home")}
             >
+              <span className="brand-mark">
+                <ImageIcon name="brand" />
+              </span>
               FlowTrack
-              <span className="brand-dot" />
             </a>
             <p className="hidden text-sm text-muted-foreground lg:block">
               Your money, in view.
             </p>
           </div>
-          <div className="flex items-center gap-1">
+          <div className="month-switcher">
             <Button
               variant="ghost"
               size="sm"
               aria-label="Previous month"
               onClick={() => setMonth(shiftMonth(month, -1))}
             >
-              Prev
+              <ImageIcon name="left" />
             </Button>
             <Popover>
               <PopoverTrigger asChild>
@@ -173,7 +196,13 @@ export default function App() {
                   size="sm"
                   aria-label="Choose reporting month"
                 >
-                  {monthLabel(month)}
+                  <ImageIcon name="calendar" />
+                  <span>
+                    {new Date(`${month}-15T12:00:00`).toLocaleDateString(
+                      "en-MY",
+                      { month: "short", year: "numeric" },
+                    )}
+                  </span>
                 </Button>
               </PopoverTrigger>
               <PopoverContent className="w-72">
@@ -227,12 +256,12 @@ export default function App() {
               aria-label="Next month"
               onClick={() => setMonth(shiftMonth(month, 1))}
             >
-              Next
+              <ImageIcon name="right" />
             </Button>
           </div>
         </header>
         <main className="main-content">
-          <div className="mb-6 flex items-baseline justify-between gap-3">
+          <div className="page-heading">
             <h1 className="text-2xl font-semibold tracking-tight">
               {view === "Home" ? "Overview" : view}
             </h1>
@@ -253,7 +282,8 @@ export default function App() {
                   !!editor ||
                   !!payment ||
                   importOpen ||
-                  !!scan
+                  !!scan ||
+                  !!statementEditor
                 }
                 onClick={() => void updateServiceWorker(true)}
               >
@@ -301,7 +331,9 @@ export default function App() {
             )}
             {view === "Transactions" && <Transactions {...props} />}
             {view === "Bills" && <Bills {...props} />}
-            {view === "Plans" && <Plans {...props} />}
+            {view === "Plans" && (
+              <Plans {...props} onStatement={openStatement} />
+            )}
             {view === "Budgets" && <Budgets {...props} />}
             {view === "Accounts" && <Accounts {...props} />}
             {view === "Reports" && (
@@ -341,15 +373,18 @@ export default function App() {
                       className="h-auto w-full justify-between rounded-none py-5 text-left"
                       onClick={() => navigate(item.name)}
                     >
-                      <div>
-                        <p>{item.name}</p>
-                        <p className="mt-1 text-xs font-normal text-muted-foreground">
-                          {item.description}
-                        </p>
+                      <div className="flex min-w-0 items-center gap-3">
+                        <span className="icon-tile">
+                          <ImageIcon name={navigationIcons[item.name]} />
+                        </span>
+                        <div>
+                          <p>{item.name}</p>
+                          <p className="mt-1 text-xs font-normal text-muted-foreground">
+                            {item.description}
+                          </p>
+                        </div>
                       </div>
-                      <span className="text-xs text-muted-foreground">
-                        Open
-                      </span>
+                      <ImageIcon name="right" className="size-4" />
                     </Button>
                   ))}
                 </div>
@@ -358,6 +393,7 @@ export default function App() {
                   variant="outline"
                   onClick={() => setImportOpen(true)}
                 >
+                  <ImageIcon name="upload" />
                   Import file or paste text
                 </Button>
               </Panel>
@@ -380,7 +416,10 @@ export default function App() {
             }
             onClick={() => navigate(label)}
           >
-            {label}
+            <span className="nav-icon">
+              <ImageIcon name={navigationIcons[label]} />
+            </span>
+            <span className="nav-label">{label}</span>
           </Button>
         ))}
       </nav>
@@ -400,6 +439,7 @@ export default function App() {
           key={`${editor.kind}:${editor.row?.id ?? editor.row?.title ?? "new"}`}
           editor={editor}
           {...props}
+          onStatement={openStatement}
           onClose={() => setEditor(null)}
         />
       )}
@@ -413,6 +453,16 @@ export default function App() {
         />
       )}
       <Suspense fallback={null}>
+        {statementEditor && (
+          <DebtStatementDialog
+            editor={statementEditor}
+            onClose={() => setStatementEditor(null)}
+            onReview={(next) => {
+              setStatementEditor(null);
+              setEditor(next);
+            }}
+          />
+        )}
         {importOpen && (
           <ImportDialog
             finance={finance}

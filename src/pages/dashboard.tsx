@@ -1,3 +1,8 @@
+import {
+  ImageIcon,
+  categoryIcon,
+  type IconName,
+} from "../components/image-icon";
 import { Button } from "../components/ui/button";
 import { Empty, Panel } from "../components/shared";
 import type { Finance } from "../hooks/use-finance";
@@ -10,7 +15,7 @@ import {
   budgetLimit,
 } from "../lib/finance";
 import { DEFAULT_SETTINGS } from "../lib/types";
-import { subscriptionLogo } from "../lib/subscriptions";
+import { billImage } from "../lib/icons";
 import type { Payment } from "../components/payment-dialog";
 import type { Editor } from "../components/entry-dialog";
 export function Dashboard({
@@ -49,63 +54,109 @@ export function Dashboard({
     .sort((a, b) => b.spent - a.spent);
   return (
     <div className="space-y-6 page-enter">
-      <section className="summary-surface">
-        <div className="flex flex-wrap items-start justify-between gap-4">
-          <div>
-            <p className="eyebrow">Safe to spend</p>
-            <h2
-              data-testid="safe-to-spend"
-              className={`mt-2 text-4xl font-semibold tracking-tight tabular-nums sm:text-5xl ${stats.safeToSpend < 0 ? "text-destructive" : ""}`}
-            >
-              {money(stats.safeToSpend)}
-            </h2>
-            <p className="mt-2 max-w-md text-sm text-muted-foreground">
-              After unpaid bills, debt payments, and your savings target.
-            </p>
-          </div>
+      <section
+        className={`balance-card ${stats.safeToSpend < 0 ? "balance-negative" : ""}`}
+      >
+        <div className="balance-topline">
+          <p className="flex items-center gap-2 text-sm font-medium">
+            <ImageIcon name="shield" className="icon-light size-4" />
+            Safe to spend
+          </p>
+          <img
+            src="/icons/wallet-art.svg"
+            alt=""
+            className="wallet-art"
+            aria-hidden="true"
+          />
+        </div>
+        <h2 data-testid="safe-to-spend" className="balance-amount">
+          {money(stats.safeToSpend)}
+        </h2>
+        <p className="balance-caption">
+          After bills, debt payments &amp; your savings target.
+        </p>
+        <div className="balance-footer">
+          <span className="flex items-center gap-2 text-xs">
+            <ImageIcon name="check" className="icon-light size-4" />
+            {stats.safeToSpend < 0
+              ? "Commitments exceed your balance"
+              : "Your commitments are accounted for"}
+          </span>
           <Button
-            variant="outline"
+            className="balance-add"
             onClick={() => onEdit({ kind: "expenses" })}
           >
+            <ImageIcon name="plus" className="size-4" />
             Add expense
           </Button>
         </div>
-        <div className="mt-7 grid grid-cols-2 gap-5 border-t pt-5 sm:grid-cols-4">
-          {[
-            { label: "Available balance", value: stats.balance },
-            { label: "Income this month", value: stats.totalIncome },
-            { label: "Unpaid bills", value: stats.unpaidBills },
-            { label: "Savings set aside", value: stats.savings },
-          ].map((item) => (
-            <div key={item.label}>
-              <p className="text-xs text-muted-foreground">{item.label}</p>
-              <p className="mt-1.5 text-lg font-medium tabular-nums">
-                {money(item.value)}
-              </p>
-            </div>
-          ))}
-        </div>
       </section>
-      <div className="flex flex-wrap gap-2">
-        <Button variant="outline" onClick={() => onEdit({ kind: "income" })}>
-          Add income
+      <div className="summary-grid">
+        {(
+          [
+            {
+              label: "Available balance",
+              value: stats.balance,
+              icon: "wallet",
+            },
+            {
+              label: "Income this month",
+              value: stats.totalIncome,
+              icon: "income",
+            },
+            {
+              label: "Unpaid bills",
+              value: stats.unpaidBills,
+              icon: "receipt",
+            },
+            {
+              label: "Savings set aside",
+              value: stats.savings,
+              icon: "savings",
+            },
+          ] satisfies { label: string; value: number; icon: IconName }[]
+        ).map((item) => (
+          <div key={item.label} className="summary-tile">
+            <span className="summary-icon">
+              <ImageIcon name={item.icon} />
+            </span>
+            <div className="min-w-0">
+              <p className="summary-label">{item.label}</p>
+              <p className="summary-value">{money(item.value)}</p>
+            </div>
+          </div>
+        ))}
+      </div>
+      <div className="quick-actions" aria-label="Quick actions">
+        <Button variant="ghost" onClick={() => onEdit({ kind: "income" })}>
+          <span className="quick-icon">
+            <ImageIcon name="income" />
+          </span>
+          <span>Add income</span>
         </Button>
-        <Button
-          variant="outline"
-          onClick={() => onEdit({ kind: "commitments" })}
-        >
-          Add bill
+        <Button variant="ghost" onClick={() => onEdit({ kind: "commitments" })}>
+          <span className="quick-icon">
+            <ImageIcon name="receipt" />
+          </span>
+          <span>Add bill</span>
         </Button>
-        <Button variant="outline" onClick={onScan}>
-          Scan receipt
+        <Button variant="ghost" onClick={onScan}>
+          <span className="quick-icon">
+            <ImageIcon name="scan" />
+          </span>
+          <span>Scan receipt</span>
         </Button>
         <Button variant="ghost" onClick={() => onView("Reports")}>
-          View reports
+          <span className="quick-icon">
+            <ImageIcon name="chart" />
+          </span>
+          <span>View reports</span>
         </Button>
       </div>
       <div className="grid gap-6 lg:grid-cols-2">
         <Panel
           title="Upcoming bills"
+          icon="calendar"
           action={
             <Button variant="ghost" size="sm" onClick={() => onView("Bills")}>
               View all
@@ -114,22 +165,24 @@ export function Dashboard({
         >
           {stats.schedule.filter((o) => o.log?.status !== "paid").length ===
           0 ? (
-            <Empty>No unpaid bills for this month.</Empty>
+            <Empty icon="check">No unpaid bills for this month.</Empty>
           ) : (
             <div className="divide-y">
               {stats.schedule
                 .filter((o) => o.log?.status !== "paid")
                 .slice(0, 4)
                 .map((o) => {
-                  const logo = subscriptionLogo(o.commitment.title);
+                  const logo = billImage(o.commitment);
                   return (
                     <div key={o.id} className="row">
                       <div className="flex min-w-0 items-center gap-3">
-                        {logo && (
-                          <img src={logo} alt="" className="size-7 shrink-0" />
-                        )}
-                        <div>
-                          <p className="font-medium">{o.commitment.title}</p>
+                        <span className="icon-tile">
+                          <img src={logo} alt="" className="size-6" />
+                        </span>
+                        <div className="min-w-0">
+                          <p className="font-medium break-words">
+                            {o.commitment.title}
+                          </p>
                           <p
                             className={`mt-1 text-xs ${o.dueDate < dateKey() ? "text-destructive" : "text-muted-foreground"}`}
                           >
@@ -165,6 +218,7 @@ export function Dashboard({
         </Panel>
         <Panel
           title="Cash flow"
+          icon="activity"
           description="All completed payments are counted once."
         >
           <dl className="space-y-3 text-sm">
@@ -214,6 +268,7 @@ export function Dashboard({
       {month === dateKey().slice(0, 7) && (
         <Panel
           title="Until your next payday"
+          icon="clock"
           description={`Next payday: ${payday.next}. Future salary is not counted as received income.`}
         >
           <div className="flex items-baseline justify-between gap-4">
@@ -231,6 +286,7 @@ export function Dashboard({
       )}
       <Panel
         title="Spending by category"
+        icon="budget"
         action={
           <Button variant="ghost" size="sm" onClick={() => onView("Budgets")}>
             Manage budgets
@@ -244,7 +300,13 @@ export function Dashboard({
             {breakdown.map((category) => (
               <div key={category.id}>
                 <div className="mb-2 flex justify-between gap-3 text-sm">
-                  <span>{category.name}</span>
+                  <span className="flex min-w-0 items-center gap-2">
+                    <ImageIcon
+                      name={categoryIcon(category.name)}
+                      className="size-4"
+                    />
+                    {category.name}
+                  </span>
                   <span className="tabular-nums">
                     {money(category.spent)}
                     {category.limit > 0 && (

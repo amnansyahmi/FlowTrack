@@ -17,6 +17,7 @@ export function Accounts({
     <div className="space-y-6">
       <Panel
         title="Your accounts"
+        icon="wallet"
         description="Balances reflect transactions assigned to each account through the selected month."
         action={
           <Button onClick={() => onEdit({ kind: "accounts" })}>
@@ -96,6 +97,7 @@ export function Accounts({
       </Panel>
       <Panel
         title="Transfers"
+        icon="transfer"
         description="Transfers move money between accounts without adding income or expenses."
         action={
           <Button

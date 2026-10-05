@@ -1,3 +1,5 @@
+import { isDebtType } from "./debt-statement";
+import { isBillIcon } from "./icons";
 import {
   STORE_NAMES,
   emptyData,
@@ -178,6 +180,12 @@ export function validateData(input: unknown): StoreData {
       )
         throw new Error("Invalid frequency.");
       if (
+        store === "commitments" &&
+        row.icon !== undefined &&
+        !isBillIcon(row.icon)
+      )
+        throw new Error("Invalid bill icon.");
+      if (
         store === "commitmentLogs" &&
         !["paid", "unpaid", "overdue"].includes(String(row.status))
       )
@@ -192,6 +200,12 @@ export function validateData(input: unknown): StoreData {
         Number(row.remainingAmount) > Number(row.originalAmount)
       )
         throw new Error("Remaining principal exceeds original principal.");
+      if (
+        store === "debts" &&
+        row.debtType !== undefined &&
+        !isDebtType(row.debtType)
+      )
+        throw new Error("Invalid debt type.");
       if (store === "goals" && Number(row.targetAmount) <= 0)
         throw new Error("Savings target must be positive.");
       if (store === "settings" && row.id !== "preferences")
@@ -279,6 +293,12 @@ export function validateData(input: unknown): StoreData {
       )
         throw new Error("Backup references a missing account.");
     }
+  for (const debt of data.debts)
+    if (
+      debt.statementId &&
+      !data.receipts.some((receipt) => receipt.id === debt.statementId)
+    )
+      throw new Error("Backup references a missing debt statement preview.");
   for (const transfer of data.transfers)
     if (
       transfer.fromAccountId === transfer.toAccountId ||

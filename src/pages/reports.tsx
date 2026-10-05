@@ -67,6 +67,7 @@ export default function Reports({
     <div className="space-y-6">
       <Panel
         title="Monthly overview"
+        icon="chart"
         description="Outflows include expenses, completed bill/debt payments, and savings set aside."
         action={
           snapshot ? (
@@ -130,6 +131,7 @@ export default function Reports({
       </Panel>
       <Panel
         title="Saved monthly snapshots"
+        icon="calendar"
         description="Snapshots capture totals at a point in time. They do not lock or delete transactions."
       >
         {finance.data.monthlySnapshots.length === 0 ? (

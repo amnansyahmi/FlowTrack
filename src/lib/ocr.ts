@@ -51,7 +51,7 @@ export function parseReceipt(text: string, confidence = 0) {
     raw: text,
   };
 }
-export async function scanReceipt(file: File, signal?: AbortSignal) {
+export async function readImageText(file: File, signal?: AbortSignal) {
   const { createWorker } = await import("tesseract.js");
   if (signal?.aborted) throw new Error("Receipt scan cancelled.");
   let worker: Awaited<ReturnType<typeof createWorker>> | undefined;
@@ -85,12 +85,16 @@ export async function scanReceipt(file: File, signal?: AbortSignal) {
       interrupted,
     ]);
     const result = await Promise.race([worker.recognize(file), interrupted]);
-    return parseReceipt(result.data.text, result.data.confidence);
+    return { text: result.data.text, confidence: result.data.confidence };
   } finally {
     clearTimeout(timer!);
     signal?.removeEventListener("abort", cancel);
     await worker?.terminate();
   }
+}
+export async function scanReceipt(file: File, signal?: AbortSignal) {
+  const result = await readImageText(file, signal);
+  return parseReceipt(result.text, result.confidence);
 }
 export async function receiptImage(file: File): Promise<string> {
   if (

@@ -1,8 +1,10 @@
+import { ImageIcon } from "../components/image-icon";
 import type { Finance } from "../hooks/use-finance";
 import type { Editor } from "../components/entry-dialog";
 import type { Payment } from "../components/payment-dialog";
 import { occurrences, money, dueDate } from "../lib/finance";
-import { subscriptionLogo, subscriptions } from "../lib/subscriptions";
+import { subscriptions } from "../lib/subscriptions";
+import { billImage } from "../lib/icons";
 import { Button } from "../components/ui/button";
 import { Confirm, Empty, Panel } from "../components/shared";
 export function Bills({
@@ -21,9 +23,11 @@ export function Bills({
     <div className="space-y-6 page-enter">
       <Panel
         title="Payments this month"
-        description="Each weekly, monthly, or yearly bill has its own dated payment."
+        icon="calendar"
+        description="Review, edit, and record your scheduled payments."
         action={
           <Button onClick={() => onEdit({ kind: "commitments" })}>
+            <ImageIcon name="plus" className="icon-light size-4" />
             Add bill
           </Button>
         }
@@ -35,49 +39,78 @@ export function Bills({
         ) : (
           <div className="divide-y">
             {schedule.map((o) => {
-              const logo = subscriptionLogo(o.commitment.title);
+              const logo = billImage(o.commitment);
               const paid = o.log?.status === "paid";
               return (
-                <div className="row" key={o.id}>
-                  <div className="flex items-center gap-3">
-                    {logo && <img src={logo} className="size-8" alt="" />}
-                    <div>
-                      <p className="font-medium">{o.commitment.title}</p>
+                <div className="bill-payment" key={o.id}>
+                  <div className="bill-payment-heading">
+                    <span className="icon-tile">
+                      <img src={logo} className="size-6" alt="" />
+                    </span>
+                    <div className="min-w-0">
+                      <p className="font-medium break-words">
+                        {o.commitment.title}
+                      </p>
                       <p className="mt-1 text-xs text-muted-foreground">
-                        {o.dueDate} · {o.commitment.frequency} ·{" "}
-                        {paid ? "Paid" : "Unpaid"}
+                        {new Date(`${o.dueDate}T12:00:00`).toLocaleDateString(
+                          "en-MY",
+                          { day: "numeric", month: "short" },
+                        )}{" "}
+                        · {o.commitment.frequency}
                       </p>
                     </div>
-                  </div>
-                  <div className="text-right">
-                    <p className="mb-1 text-sm font-medium tabular-nums">
+                    <p className="bill-amount">
                       {money(
                         paid
                           ? (o.log?.amount ?? o.commitment.amount)
                           : o.commitment.amount,
                       )}
                     </p>
-                    {paid ? (
-                      <Confirm
-                        disabled={finance.pending}
-                        title="Reverse this bill payment?"
-                        description="Its linked expense will also be removed."
-                        onConfirm={() => finance.undoBill(o.log!.id)}
-                      >
-                        Undo payment
-                      </Confirm>
-                    ) : (
+                  </div>
+                  <div className="bill-payment-footer">
+                    <span className={`bill-status ${paid ? "is-paid" : ""}`}>
+                      <span />
+                      {paid ? "Paid" : "Unpaid"}
+                    </span>
+                    <div className="bill-actions">
                       <Button
                         size="sm"
-                        variant="outline"
+                        variant="ghost"
                         disabled={finance.pending}
+                        aria-label={`Edit ${o.commitment.title}`}
                         onClick={() =>
-                          onPayment({ kind: "bill", occurrence: o })
+                          onEdit({
+                            kind: "commitments",
+                            row: { ...o.commitment },
+                          })
                         }
                       >
-                        Record payment
+                        <ImageIcon name="edit" className="size-4" />
+                        Edit
                       </Button>
-                    )}
+                      {paid ? (
+                        <Confirm
+                          disabled={finance.pending}
+                          title="Reverse this bill payment?"
+                          description="Its linked expense will also be removed."
+                          onConfirm={() => finance.undoBill(o.log!.id)}
+                        >
+                          Undo payment
+                        </Confirm>
+                      ) : (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          disabled={finance.pending}
+                          onClick={() =>
+                            onPayment({ kind: "bill", occurrence: o })
+                          }
+                        >
+                          <ImageIcon name="check" className="size-4" />
+                          Record payment
+                        </Button>
+                      )}
+                    </div>
                   </div>
                 </div>
               );
@@ -87,14 +120,15 @@ export function Bills({
       </Panel>
       <Panel
         title="Subscription shortcuts"
+        icon="receipt"
         description="Choose a service and enter your plan price. No subscription is added until you save."
       >
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="subscription-grid">
           {subscriptions.map((service) => (
             <Button
               key={service.name}
               variant="outline"
-              className="h-auto justify-start gap-3 py-4"
+              className="subscription-tile"
               onClick={() =>
                 onEdit({ kind: "commitments", row: { title: service.name } })
               }
@@ -116,6 +150,7 @@ export function Bills({
       </Panel>
       <Panel
         title="Recurring bill details"
+        icon="settings"
         description="Stopping a bill preserves its recorded payment history."
       >
         {finance.data.commitments.length === 0 ? (
@@ -123,13 +158,18 @@ export function Bills({
         ) : (
           <div className="divide-y">
             {finance.data.commitments.map((bill) => (
-              <div className="row" key={bill.id}>
-                <div>
-                  <p className="font-medium">{bill.title}</p>
-                  <p className="mt-1 text-xs text-muted-foreground">
-                    {money(bill.amount)} · {bill.frequency}
-                    {bill.endDate && ` · Ends ${bill.endDate.slice(0, 10)}`}
-                  </p>
+              <div className="row recurring-row" key={bill.id}>
+                <div className="flex min-w-0 items-center gap-3">
+                  <span className="icon-tile">
+                    <img src={billImage(bill)} alt="" className="size-6" />
+                  </span>
+                  <div className="min-w-0">
+                    <p className="font-medium break-words">{bill.title}</p>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      {money(bill.amount)} · {bill.frequency}
+                      {bill.endDate && ` · Ends ${bill.endDate.slice(0, 10)}`}
+                    </p>
+                  </div>
                 </div>
                 <div className="flex flex-wrap gap-1">
                   <Button
@@ -139,6 +179,7 @@ export function Bills({
                       onEdit({ kind: "commitments", row: { ...bill } })
                     }
                   >
+                    <ImageIcon name="edit" className="size-4" />
                     Edit
                   </Button>
                   <Confirm

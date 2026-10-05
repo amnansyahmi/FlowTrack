@@ -82,3 +82,15 @@ npm run test:e2e
 The regression suite covers cash flow, per-debt reserves, recurrence, short months, salary-month assignment, text/receipt parsing, backup validation, v3 database upgrades, atomic rollback, and stale-edit conflicts. Browser tests cover payments and reversals, calendar selection, preferences, subscriptions, imports, budget months, mobile layout, and offline reloads. GitHub Actions runs these checks for pull requests.
 
 The app is split into calculation, validation, database, import, and transaction modules; a data hook; reusable shadcn controls; and feature screens. Reports and Tesseract are loaded on demand. See `THIRD_PARTY_NOTICES.md` for component and logo attribution.
+
+## Mobile interface and statements
+
+The dashboard uses local SVG images, compact summary tiles, and a five-item bottom navigation. PWA safe areas protect the notch and home indicator. One-finger scrolling remains enabled; pinch/double-tap zoom is disabled as requested, and mobile inputs use 16px text to avoid focus zoom. Save confirmations disappear after 4.5 seconds. Errors remain available for review.
+
+Bills can be edited directly in the monthly payment list. Names such as Kereta/Car, Rumah/House, insurance, groceries, and utilities select matching icons automatically. Subscription names select their logos. The Bill icon picker can override this or return to Automatic; overrides are included in backups.
+
+Plans includes Credit card, SPayLater, Grab PayLater, and Atome presets. Use Upload statement or screenshot (or Read statement on an existing debt). PDF statements up to 12 MB, screenshots up to 8 MB, and pasted statement text are supported. PDF.js reads up to five pages; scanned pages and images use Tesseract OCR. PDFs with passwords prompt for the password, which is never stored. All processing runs on the device; OCR's first-use worker and language downloads need a connection.
+
+Extraction recognises labelled outstanding balances, monthly instalments/amounts due, minimum payments, providers, and due dates. Credit limits and available credit are excluded. Missing or ambiguous amounts are flagged. Review & edit debt opens a prefilled form; nothing is saved until Save. For existing debts, original principal and recorded payment history are retained; the reviewed outstanding amount updates remaining principal. If a new statement balance exceeds original principal, update the original amount explicitly. Recording a statement does not record a payment or deduct cash.
+
+A compressed first-page/image preview is saved with the debt in one atomic transaction and included in backups. The original PDF is not retained. PayLater plans and card debt remain principal/fixed-payment tracking; changing balances, interest and new purchases must be reviewed manually.

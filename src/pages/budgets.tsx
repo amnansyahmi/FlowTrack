@@ -19,6 +19,7 @@ export function Budgets({
   return (
     <Panel
       title="Monthly category budgets"
+      icon="budget"
       description="Limits are saved separately for each month. Zero means no spending limit."
       action={
         <Button onClick={() => onEdit({ kind: "budgets" })}>Add budget</Button>

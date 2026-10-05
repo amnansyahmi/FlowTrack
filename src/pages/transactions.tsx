@@ -1,3 +1,4 @@
+import { ImageIcon, categoryIcon } from "../components/image-icon";
 import { useRef, useState } from "react";
 import type { Finance } from "../hooks/use-finance";
 import type { Editor } from "../components/entry-dialog";
@@ -97,6 +98,7 @@ export function Transactions({
       />
       <Panel
         title="Transaction history"
+        icon="activity"
         description="Payments, expenses, income, and savings in one place."
       >
         {rows.length === 0 ? (
@@ -109,23 +111,39 @@ export function Transactions({
                 className="py-4"
               >
                 <div className="flex items-start justify-between gap-4">
-                  <div className="min-w-0">
-                    <p className="font-medium break-words">
-                      {transaction.title}
-                    </p>
-                    <p className="mt-1 text-xs text-muted-foreground">
-                      {transaction.date.slice(0, 10)} ·{" "}
-                      {transaction.type === "expense"
-                        ? transaction.row.debtPaymentId
-                          ? "Debt payment"
-                          : transaction.row.commitmentLogId
-                            ? "Bill payment"
-                            : finance.data.categories.find(
-                                (c) => c.id === transaction.categoryId,
-                              )?.name || "Expense"
-                        : transaction.type}
-                      {transaction.linked ? " · Linked" : ""}
-                    </p>
+                  <div className="flex min-w-0 items-start gap-3">
+                    <span className="icon-tile">
+                      <ImageIcon
+                        name={
+                          transaction.type === "income"
+                            ? "income"
+                            : categoryIcon(
+                                finance.data.categories.find(
+                                  (category) =>
+                                    category.id === transaction.categoryId,
+                                )?.name ?? transaction.title,
+                              )
+                        }
+                      />
+                    </span>
+                    <div className="min-w-0">
+                      <p className="font-medium break-words">
+                        {transaction.title}
+                      </p>
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        {transaction.date.slice(0, 10)} ·{" "}
+                        {transaction.type === "expense"
+                          ? transaction.row.debtPaymentId
+                            ? "Debt payment"
+                            : transaction.row.commitmentLogId
+                              ? "Bill payment"
+                              : finance.data.categories.find(
+                                  (c) => c.id === transaction.categoryId,
+                                )?.name || "Expense"
+                          : transaction.type}
+                        {transaction.linked ? " · Linked" : ""}
+                      </p>
+                    </div>
                   </div>
                   <p
                     className={`shrink-0 font-medium tabular-nums ${transaction.type === "income" ? "text-primary" : ""}`}

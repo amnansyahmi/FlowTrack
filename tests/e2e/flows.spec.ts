@@ -4,7 +4,7 @@ import {
   DEFAULT_SETTINGS,
   type StoreData,
 } from "../../src/lib/types";
-import { dateKey } from "../../src/lib/finance";
+import { dateKey, money } from "../../src/lib/finance";
 import { makeBackup } from "../../src/lib/backup";
 const today = dateKey();
 const month = today.slice(0, 7);
@@ -440,4 +440,223 @@ test("receipt attachments are compressed, viewable, and included in exported bac
   const restored = parseBackup(await readFile(path!, "utf8"));
   expect(restored.receipts).toHaveLength(1);
   expect(restored.expenses[0].receiptId).toBe(restored.receipts[0].id);
+});
+
+test("bill editing and manual image icons persist from the monthly payment list", async ({
+  page,
+}) => {
+  const data = fixture();
+  data.commitments = [
+    {
+      id: "car",
+      title: "Kereta",
+      amount: 1100,
+      dueDateDay: 1,
+      frequency: "monthly",
+      categoryId: "subs",
+      startDate: `${month}-01`,
+    },
+  ];
+  await page.setViewportSize({ width: 375, height: 812 });
+  await seed(page, data);
+  await page
+    .locator(".mobile-nav")
+    .getByRole("button", { name: "Bills", exact: true })
+    .click();
+  const row = page.locator(".bill-payment");
+  await expect(row.locator("img")).toHaveAttribute("src", "/icons/car.svg");
+  await row.getByRole("button", { name: "Edit Kereta" }).click();
+  const dialog = page.getByRole("dialog");
+  await dialog.getByLabel("Amount (RM)").fill("1200");
+  await dialog.getByLabel("Bill icon", { exact: true }).click();
+  await page.getByRole("button", { name: "Use House icon" }).click();
+  await dialog.getByRole("button", { name: "Save", exact: true }).click();
+  await expect(row.getByText(/RM\s*1,200.00/)).toBeVisible();
+  await expect(row.locator("img")).toHaveAttribute("src", "/icons/home.svg");
+  await page.reload();
+  await expect(page.locator(".bill-payment img")).toHaveAttribute(
+    "src",
+    "/icons/home.svg",
+  );
+});
+
+test("save confirmations dismiss automatically and do not hide the updated data", async ({
+  page,
+}) => {
+  await seed(page, fixture());
+  await page.getByRole("button", { name: "Add expense", exact: true }).click();
+  const dialog = page.getByRole("dialog");
+  await dialog.getByLabel("Amount (RM)").fill("25");
+  await dialog.getByLabel("Merchant").fill("Dinner");
+  await dialog.getByRole("button", { name: "Save", exact: true }).click();
+  await expect(
+    page.getByRole("status").filter({ hasText: "Saved." }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("status").filter({ hasText: "Saved." }),
+  ).toHaveCount(0, { timeout: 7000 });
+  await expect(page.getByTestId("safe-to-spend")).toHaveText(money(-25));
+});
+
+test("real PDF statement becomes a reviewed debt with a saved preview", async ({
+  page,
+}) => {
+  await seed(page, fixture());
+  await view(page, "Plans");
+  await page
+    .getByRole("button", {
+      name: "Upload statement or screenshot",
+      exact: true,
+    })
+    .click();
+  await page
+    .getByLabel("Upload debt statement")
+    .setInputFiles("tests/fixtures/credit-card.pdf");
+  await page
+    .getByRole("button", { name: "Review & edit debt", exact: true })
+    .waitFor({ timeout: 20000 });
+  await expect(
+    page.getByRole("dialog").getByText(/RM\s*1,200.00/),
+  ).toBeVisible();
+  await page
+    .getByRole("button", { name: "Review & edit debt", exact: true })
+    .click();
+  const dialog = page.getByRole("dialog");
+  await expect(dialog.getByLabel("Remaining amount (RM)")).toHaveValue("1200");
+  await expect(dialog.getByLabel("Monthly payment (RM)")).toHaveValue("200");
+  await expect(dialog.getByLabel("Due day", { exact: true })).toHaveValue("15");
+  await dialog.getByRole("button", { name: "Save", exact: true }).click();
+  await page.reload();
+  await expect(
+    page.getByText("CIMB credit card", { exact: true }),
+  ).toBeVisible();
+  await page
+    .getByRole("button", { name: "Statement preview", exact: true })
+    .click();
+  await expect(page.getByRole("dialog").locator("img")).toHaveAttribute(
+    "src",
+    /^data:image\/jpeg;base64,/,
+  );
+});
+
+test("PayLater statement text and presets require confirmation before creating debt", async ({
+  page,
+}) => {
+  await seed(page, fixture());
+  await view(page, "Plans");
+  for (const provider of ["Credit card", "SPayLater", "Grab PayLater", "Atome"])
+    await expect(
+      page.getByRole("button", { name: provider, exact: true }),
+    ).toBeVisible();
+  await page
+    .getByRole("button", {
+      name: "Upload statement or screenshot",
+      exact: true,
+    })
+    .click();
+  await page.getByText("Paste statement text instead", { exact: true }).click();
+  await page
+    .getByLabel("Statement text")
+    .fill(
+      "Atome\nTotal outstanding RM600.00\nMonthly instalment RM200.00\nDue date 20/10/2026",
+    );
+  await page.getByRole("button", { name: "Detect statement details" }).click();
+  await page.getByRole("button", { name: "Review & edit debt" }).click();
+  const dialog = page.getByRole("dialog");
+  await expect(dialog.getByLabel("Name", { exact: true })).toHaveValue("Atome");
+  await expect(dialog.getByLabel("Remaining amount (RM)")).toHaveValue("600");
+  await dialog.getByRole("button", { name: "Save", exact: true }).click();
+  await expect(page.getByText("Atome", { exact: true }).last()).toBeVisible();
+  await expect(page.getByText(/Remaining of RM\s*600.00/)).toBeVisible();
+});
+
+test("PWA shell and populated mobile screens fit phone and tablet widths", async ({
+  page,
+}) => {
+  test.setTimeout(60000);
+  const data = fixture();
+  data.income = [{ id: "i", amount: 7000, date: today }];
+  data.commitments = [
+    {
+      id: "house",
+      title: "Loan Rumah",
+      amount: 1300,
+      dueDateDay: 1,
+      frequency: "monthly",
+      categoryId: "subs",
+      startDate: `${month}-01`,
+    },
+    {
+      id: "internet",
+      title: "Internet + CelcomDigi family plan",
+      amount: 150,
+      dueDateDay: 1,
+      frequency: "monthly",
+      categoryId: "subs",
+      startDate: `${month}-01`,
+    },
+  ];
+  const errors: string[] = [];
+  page.on("pageerror", (error) => errors.push(error.message));
+  await seed(page, data);
+  for (const width of [320, 375, 390, 430, 768, 1440]) {
+    await page.setViewportSize({ width, height: 844 });
+    for (const name of [
+      "Home",
+      "Transactions",
+      "Bills",
+      "Plans",
+      "More",
+      "Budgets",
+      "Accounts",
+      "Reports",
+      "Settings",
+    ]) {
+      if (width >= 1024) {
+        if (name === "More") continue;
+        await view(page, name);
+      } else if (
+        ["Budgets", "Accounts", "Reports", "Settings"].includes(name)
+      ) {
+        await page
+          .locator(".mobile-nav")
+          .getByRole("button", { name: "More", exact: true })
+          .click();
+        await page
+          .getByRole("button", { name: new RegExp(`^${name} `) })
+          .click();
+        await page.getByRole("heading", { name, exact: true }).waitFor();
+      } else
+        await page
+          .locator(".mobile-nav")
+          .getByRole("button", { name, exact: true })
+          .click();
+      expect(
+        await page.evaluate(
+          () => document.documentElement.scrollWidth <= innerWidth,
+        ),
+      ).toBe(true);
+      if (width === 390)
+        await page.screenshot({
+          path: `test-results/pwa-${name.toLowerCase()}.png`,
+        });
+    }
+    if (width < 1024) {
+      const nav = await page.locator(".mobile-nav").boundingBox();
+      expect(nav?.width).toBe(width);
+      expect((nav?.y ?? 0) + (nav?.height ?? 0)).toBe(844);
+      await expect(page.locator(".mobile-nav img")).toHaveCount(5);
+    }
+  }
+  expect(
+    await page.locator('meta[name="viewport"]').getAttribute("content"),
+  ).toContain("user-scalable=no");
+  expect(
+    await page.evaluate(() => {
+      const event = new Event("gesturestart", { cancelable: true });
+      document.dispatchEvent(event);
+      return event.defaultPrevented;
+    }),
+  ).toBe(true);
+  expect(errors).toEqual([]);
 });
