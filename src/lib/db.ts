@@ -1,226 +1,158 @@
-const DB_NAME = 'FlowTrackDB';
-const DB_VERSION = 3;
+import {
+  STORE_NAMES,
+  emptyData,
+  type StoreData,
+  type StoreName,
+} from "./types";
+export * from "./types";
 
-export interface Category {
-  id: string;
-  name: string;
-  icon: string;
-  type: 'income' | 'expense' | 'commitment';
-  budget?: number;
-}
+const DB_NAME = "FlowTrackDB";
+export const DB_VERSION = 4;
+let connection: Promise<IDBDatabase> | undefined;
 
-export interface Income {
-  id: string;
-  amount: number;
-  date: string; // ISO string
-  note?: string;
-  categoryId?: string;
-  isSalary?: boolean;
-  monthKey?: string; // YYYY-MM for salary
-  source?: string;
-}
-
-export interface Expense {
-  id: string;
-  amount: number;
-  date: string; // ISO string
-  note?: string;
-  categoryId: string;
-  receiptId?: string;
-  paymentMethod?: string;
-  merchant?: string;
-}
-
-export interface Commitment {
-  id: string;
-  title: string;
-  amount: number;
-  dueDateDay: number; // 1-31
-  categoryId: string;
-  note?: string;
-  paymentMethod?: string;
-  frequency: 'weekly' | 'monthly' | 'yearly';
-  startDate?: string;
-  endDate?: string;
-}
-
-export interface CommitmentLog {
-  id: string;
-  commitmentId: string;
-  monthYear: string; // YYYY-MM
-  status: 'paid' | 'unpaid' | 'overdue';
-  paidDate?: string;
-  receiptId?: string;
-  note?: string;
-}
-
-export interface Receipt {
-  id: string;
-  data: string; // base64
-  type: string;
-  name: string;
-  ocrText?: string;
-  detectedData?: {
-    amount?: number;
-    date?: string;
-    merchant?: string;
-    paymentMethod?: string;
-  };
-}
-
-export interface Goal {
-  id: string;
-  name: string;
-  targetAmount: number;
-  currentAmount: number;
-  monthlyAllocation?: number;
-  deadline?: string;
-  color?: string;
-}
-
-export interface GoalContribution {
-  id: string;
-  goalId: string;
-  amount: number;
-  date: string;
-  monthYear: string;
-}
-
-export interface Budget {
-  id: string;
-  categoryId: string;
-  monthKey: string;
-  limit: number;
-  note?: string;
-}
-
-export interface Debt {
-  id: string;
-  name: string;
-  lender: string;
-  originalAmount: number;
-  remainingAmount: number;
-  monthlyPayment: number;
-  dueDay: number;
-  interestRate?: number;
-  startDate: string;
-  note?: string;
-}
-
-export interface DebtPayment {
-  id: string;
-  debtId: string;
-  amount: number;
-  date: string;
-  receiptId?: string;
-  note?: string;
-}
-
-export interface MonthlySnapshot {
-  id: string; // monthKey (YYYY-MM)
-  totals: {
-    income: number;
-    expenses: number;
-    commitments: {
-      total: number;
-      paid: number;
-    };
-    savings: number;
-    debts: number;
-    balance: number;
-  };
-  categories: { id: string, name: string, spent: number }[];
-  createdAt: string;
-}
-
-export async function openDB(): Promise<IDBDatabase> {
-  return new Promise((resolve, reject) => {
+export function openDB(): Promise<IDBDatabase> {
+  if (connection) return connection;
+  connection = new Promise((resolve, reject) => {
     const request = indexedDB.open(DB_NAME, DB_VERSION);
-
-    request.onerror = () => reject(request.error);
-    request.onsuccess = () => resolve(request.result);
-
-    request.onupgradeneeded = (event: any) => {
-      const db = event.target.result;
-
-      const stores = [
-        { name: 'categories', key: 'id' },
-        { name: 'income', key: 'id' },
-        { name: 'expenses', key: 'id' },
-        { name: 'commitments', key: 'id' },
-        { name: 'commitmentLogs', key: 'id', indexes: [['by_commitment', 'commitmentId'], ['by_month', 'monthYear']] },
-        { name: 'receipts', key: 'id' },
-        { name: 'goals', key: 'id' },
-        { name: 'goalContributions', key: 'id', indexes: [['by_goal', 'goalId'], ['by_month', 'monthYear']] },
-        { name: 'budgets', key: 'id', indexes: [['by_month', 'monthKey']] },
-        { name: 'debts', key: 'id' },
-        { name: 'debtPayments', key: 'id', indexes: [['by_debt', 'debtId']] },
-        { name: 'monthlySnapshots', key: 'id' }
-      ];
-
-      stores.forEach(s => {
-        if (!db.objectStoreNames.contains(s.name)) {
-          const store = db.createObjectStore(s.name, { keyPath: s.key });
-          if (s.indexes) {
-            s.indexes.forEach(idx => store.createIndex(idx[0], idx[1], { unique: false }));
-          }
+    request.onerror = () => {
+      connection = undefined;
+      reject(request.error);
+    };
+    request.onblocked = () => {
+      connection = undefined;
+      reject(
+        new Error(
+          "Close other FlowTrack tabs, then retry the database upgrade.",
+        ),
+      );
+    };
+    request.onupgradeneeded = () => {
+      const db = request.result;
+      const indexes: Partial<Record<StoreName, [string, string][]>> = {
+        commitmentLogs: [
+          ["by_commitment", "commitmentId"],
+          ["by_month", "monthYear"],
+        ],
+        goalContributions: [
+          ["by_goal", "goalId"],
+          ["by_month", "monthYear"],
+        ],
+        budgets: [["by_month", "monthKey"]],
+        debtPayments: [["by_debt", "debtId"]],
+        repayments: [["by_receivable", "receivableId"]],
+      };
+      for (const name of STORE_NAMES) {
+        const store = db.objectStoreNames.contains(name)
+          ? request.transaction!.objectStore(name)
+          : db.createObjectStore(name, { keyPath: "id" });
+        for (const [index, key] of indexes[name] ?? []) {
+          if (!store.indexNames.contains(index))
+            store.createIndex(index, key, { unique: false });
         }
-      });
+      }
+    };
+    request.onsuccess = () => {
+      const db = request.result;
+      db.onversionchange = () => {
+        db.close();
+        connection = undefined;
+      };
+      resolve(db);
     };
   });
+  return connection;
 }
 
-export async function getAll<T>(storeName: string): Promise<T[]> {
+type Row =
+  StoreData[StoreName][number] | ({ id: string } & Record<string, unknown>);
+export type Change = {
+  store: StoreName;
+  value?: Row;
+  deleteId?: string;
+  expected?: Row | null;
+};
+/** One transaction: either every linked record commits or none do. */
+export async function commitChanges(changes: Change[]): Promise<void> {
+  if (!changes.length) return;
   const db = await openDB();
-  return new Promise((resolve, reject) => {
-    const transaction = db.transaction(storeName, 'readonly');
-    const store = transaction.objectStore(storeName);
-    const request = store.getAll();
-    request.onsuccess = () => resolve(request.result);
-    request.onerror = () => reject(request.error);
+  await new Promise<void>((resolve, reject) => {
+    const tx = db.transaction(
+      [...new Set(changes.map((c) => c.store))],
+      "readwrite",
+    );
+    tx.oncomplete = () => resolve();
+    tx.onabort = () =>
+      reject(tx.error ?? new Error("The changes could not be saved."));
+    tx.onerror = () => {
+      /* onabort reports the final transaction result */
+    };
+    try {
+      for (const change of changes) {
+        const store = tx.objectStore(change.store);
+        const write = () => {
+          if (change.deleteId !== undefined) store.delete(change.deleteId);
+          else if (change.value) store.put(change.value);
+        };
+        if (Object.prototype.hasOwnProperty.call(change, "expected")) {
+          const request = store.get(change.deleteId ?? change.value!.id);
+          request.onsuccess = () => {
+            if (
+              JSON.stringify(request.result ?? null) !==
+              JSON.stringify(change.expected)
+            ) {
+              reject(
+                new Error(
+                  "This record changed in another tab. Reload and retry your change.",
+                ),
+              );
+              tx.abort();
+            } else write();
+          };
+        } else write();
+      }
+    } catch (error) {
+      tx.abort();
+      reject(error);
+    }
   });
 }
 
-export async function add<T>(storeName: string, item: T): Promise<void> {
+export async function loadData(): Promise<StoreData> {
   const db = await openDB();
   return new Promise((resolve, reject) => {
-    const transaction = db.transaction(storeName, 'readwrite');
-    const store = transaction.objectStore(storeName);
-    const request = store.add(item);
-    request.onsuccess = () => resolve();
-    request.onerror = () => reject(request.error);
+    const result = emptyData();
+    const tx = db.transaction(STORE_NAMES, "readonly");
+    tx.oncomplete = () => resolve(result);
+    tx.onabort = () =>
+      reject(tx.error ?? new Error("Unable to read your data."));
+    for (const name of STORE_NAMES) {
+      const request = tx.objectStore(name).getAll();
+      request.onsuccess = () => {
+        (result[name] as unknown[]) = request.result;
+      };
+    }
   });
 }
 
-export async function update<T>(storeName: string, item: T): Promise<void> {
+/** Validated by backup.ts before reaching this function. */
+export async function replaceData(data: StoreData): Promise<void> {
   const db = await openDB();
-  return new Promise((resolve, reject) => {
-    const transaction = db.transaction(storeName, 'readwrite');
-    const store = transaction.objectStore(storeName);
-    const request = store.put(item);
-    request.onsuccess = () => resolve();
-    request.onerror = () => reject(request.error);
-  });
-}
-
-export async function remove(storeName: string, id: string): Promise<void> {
-  const db = await openDB();
-  return new Promise((resolve, reject) => {
-    const transaction = db.transaction(storeName, 'readwrite');
-    const store = transaction.objectStore(storeName);
-    const request = store.delete(id);
-    request.onsuccess = () => resolve();
-    request.onerror = () => reject(request.error);
-  });
-}
-
-export async function getById<T>(storeName: string, id: string): Promise<T> {
-  const db = await openDB();
-  return new Promise((resolve, reject) => {
-    const transaction = db.transaction(storeName, 'readonly');
-    const store = transaction.objectStore(storeName);
-    const request = store.get(id);
-    request.onsuccess = () => resolve(request.result);
-    request.onerror = () => reject(request.error);
+  await new Promise<void>((resolve, reject) => {
+    const tx = db.transaction(STORE_NAMES, "readwrite");
+    tx.oncomplete = () => resolve();
+    tx.onabort = () =>
+      reject(
+        tx.error ?? new Error("Restore failed; existing data was retained."),
+      );
+    try {
+      for (const name of STORE_NAMES) {
+        const store = tx.objectStore(name);
+        store.clear();
+        for (const item of data[name]) store.add(item);
+      }
+    } catch (error) {
+      tx.abort();
+      reject(error);
+    }
   });
 }
